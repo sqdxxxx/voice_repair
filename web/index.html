@@ -1,0 +1,535 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Voice Repair Bot</title>
+  <style>
+    :root{
+      --bg: #0b1020;
+      --card: rgba(255,255,255,0.06);
+      --card2: rgba(255,255,255,0.09);
+      --text: rgba(255,255,255,0.92);
+      --muted: rgba(255,255,255,0.65);
+      --line: rgba(255,255,255,0.12);
+      --ok: #39d98a;
+      --warn: #ffcc66;
+      --err: #ff5c7a;
+      --accent: #7aa2ff;
+    }
+
+    *{ box-sizing: border-box; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      background: radial-gradient(1200px 600px at 20% 10%, rgba(122,162,255,0.20), transparent 55%),
+                  radial-gradient(900px 500px at 90% 20%, rgba(57,217,138,0.18), transparent 55%),
+                  radial-gradient(900px 600px at 40% 100%, rgba(255,92,122,0.12), transparent 60%),
+                  var(--bg);
+      color: var(--text);
+    }
+
+    .wrap{ max-width: 1100px; margin: 28px auto; padding: 0 16px; }
+    .header{
+      display:flex; align-items:center; justify-content:space-between; gap:16px;
+      margin-bottom: 16px;
+    }
+    .title{
+      font-size: 20px; font-weight: 700; letter-spacing: .2px;
+      display:flex; align-items:center; gap:10px;
+    }
+    .pill{
+      display:inline-flex; align-items:center; gap:8px;
+      padding: 6px 10px; border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--line);
+      font-size: 12px; color: var(--muted);
+    }
+    .dot{
+      width:8px; height:8px; border-radius:50%;
+      background: var(--ok);
+      box-shadow: 0 0 0 0 rgba(57,217,138,.35);
+      animation: pulse 1.6s infinite;
+    }
+    @keyframes pulse{
+      0%{ box-shadow: 0 0 0 0 rgba(57,217,138,.35); }
+      70%{ box-shadow: 0 0 0 10px rgba(57,217,138,0); }
+      100%{ box-shadow: 0 0 0 0 rgba(57,217,138,0); }
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 360px 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 920px){
+      .grid{ grid-template-columns: 1fr; }
+    }
+
+    .card{
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      backdrop-filter: blur(10px);
+    }
+    .card h3{
+      margin:0 0 10px 0;
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 600;
+      letter-spacing: .25px;
+      text-transform: uppercase;
+    }
+
+    /* Orb */
+    .orb-wrap{
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap: 12px;
+      padding: 12px 6px 6px;
+    }
+    .orb{
+      width: 170px; height: 170px; border-radius: 50%;
+      background:
+        radial-gradient(circle at 30% 25%, rgba(255,255,255,0.55), transparent 38%),
+        radial-gradient(circle at 55% 70%, rgba(122,162,255,0.25), transparent 55%),
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.16);
+      box-shadow:
+        0 18px 45px rgba(0,0,0,0.45),
+        inset 0 0 25px rgba(255,255,255,0.08);
+      transform: translateZ(0) scale(1);
+      transition: box-shadow .2s ease, border-color .2s ease;
+      position: relative;
+      overflow:hidden;
+    }
+    .orb::after{
+      content:"";
+      position:absolute; inset:-40%;
+      background: conic-gradient(from 0deg, rgba(122,162,255,.0), rgba(122,162,255,.35), rgba(57,217,138,.0));
+      filter: blur(18px);
+      opacity: .0;
+      transform: rotate(0deg);
+      transition: opacity .2s ease;
+    }
+    .orb.listening{ border-color: rgba(57,217,138,0.35); }
+    .orb.recording{ border-color: rgba(122,162,255,0.55); }
+    .orb.uploading{ border-color: rgba(255,204,102,0.60); }
+    .orb.playing{ border-color: rgba(255,92,122,0.55); }
+    .orb.active::after{ opacity: .65; animation: spin 1.4s linear infinite; }
+    @keyframes spin{ to { transform: rotate(360deg); } }
+
+    .status{
+      font-size: 14px;
+      color: var(--text);
+      text-align:center;
+    }
+    .sub{
+      font-size: 12px;
+      color: var(--muted);
+      text-align:center;
+      line-height: 1.4;
+    }
+
+    /* Meter */
+    .meter{ height: 10px; background: rgba(255,255,255,0.08); border-radius: 999px; overflow:hidden; border: 1px solid var(--line); }
+    .bar{ height: 10px; width: 0%; background: linear-gradient(90deg, rgba(57,217,138,0.85), rgba(122,162,255,0.9)); }
+
+    /* Outputs */
+    pre{
+      margin:0;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      white-space: pre-wrap;
+      color: rgba(255,255,255,0.88);
+      min-height: 74px;
+    }
+    .rowgap{ display:flex; flex-direction:column; gap: 12px; }
+    .audio{
+      width: 100%;
+      margin-top: 8px;
+      filter: invert(1) hue-rotate(180deg) saturate(1.1);
+      opacity: .95;
+    }
+    .tiny{
+      font-size: 12px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div class="title">
+        Voice Repair Bot
+        <span class="pill"><span class="dot"></span> Auto VAD</span>
+      </div>
+      <div class="pill" id="latPill">Latency: —</div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Listening Indicator</h3>
+        <div class="orb-wrap">
+          <div class="orb listening" id="orb"></div>
+          <div class="status" id="status">Initializing…</div>
+          <div class="sub" id="sub">
+            Speak to start. The system will auto-stop after silence.
+          </div>
+
+          <div style="width:100%;">
+            <div class="meter"><div class="bar" id="bar"></div></div>
+            <div class="tiny" style="margin-top:8px;">
+              Tip: If it stops too early, increase STOP_SILENCE_MS. If it never stops, decrease it.
+            </div>
+          </div>
+
+          <audio id="player" class="audio" controls></audio>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Conversation</h3>
+        <div class="rowgap">
+          <div>
+            <div class="tiny"><b>ASR (User)</b></div>
+            <pre id="asr"></pre>
+          </div>
+          <div>
+            <div class="tiny"><b>Assistant (Text)</b></div>
+            <pre id="ttsText"></pre>
+          </div>
+          <div>
+            <div class="tiny"><b>Raw Headers (debug)</b></div>
+            <pre id="debug"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const statusEl = document.getElementById("status");
+const subEl = document.getElementById("sub");
+const asrEl = document.getElementById("asr");
+const ttsTextEl = document.getElementById("ttsText");
+const debugEl = document.getElementById("debug");
+const player = document.getElementById("player");
+const bar = document.getElementById("bar");
+const orb = document.getElementById("orb");
+const latPill = document.getElementById("latPill");
+
+function setStatus(s) { statusEl.textContent = s; }
+function setSub(s) { subEl.textContent = s; }
+
+function setOrbState(state){
+  orb.classList.remove("listening","recording","uploading","playing","active");
+  if (state) orb.classList.add(state);
+}
+function setOrbActive(on){
+  if (on) orb.classList.add("active");
+  else orb.classList.remove("active");
+}
+
+// ======= Session (persist across refresh) =======
+let SESSION_ID = localStorage.getItem("SESSION_ID") || "";
+
+// ======= VAD parameters (stable energy VAD) =======
+const START_THRESHOLD = 0.030;   // start when smoothed RMS >= this
+const STOP_THRESHOLD  = 0.012;   // keep recording until smoothed RMS < this
+const STOP_SILENCE_MS = 1200;    // sustained silence time
+const MIN_RECORD_MS   = 700;     // ignore very short triggers
+const COOLDOWN_MS     = 1200;    // avoid re-trigger after reply
+const MAX_RECORD_MS   = 15000;   // hard cap
+
+// Anti-flicker
+const RMS_ALPHA    = 0.20; // smoothing factor
+const START_FRAMES = 4;    // consecutive speech frames to start
+const STOP_FRAMES  = 14;   // consecutive silence frames to stop
+
+// ======= Animation tuning for orb =======
+const ORB_BASE_SCALE = 1.00;
+const ORB_MAX_BOOST  = 0.14;
+const ORB_SMOOTHING  = 0.18;
+
+// ======= State =======
+let audioCtx, analyser, micSource, stream;
+let rafId = null;
+
+let mediaRecorder = null;
+let chunks = [];
+let isRecording = false;
+
+let lastVoiceAt = 0;
+let recordStartedAt = 0;
+let cooldownUntil = 0;
+
+let smoothEnergy = 0;
+
+// VAD stabilizers
+let rmsSmooth = 0;
+let speechFrames = 0;
+let silenceFrames = 0;
+
+// IMPORTANT: pause VAD while playing TTS to prevent echo-loop
+let isPlayingTTS = false;
+
+function nowMs() { return performance.now(); }
+
+async function initMicAndVad() {
+  setStatus("Requesting microphone permission…");
+  setSub("Please allow microphone access.");
+
+  stream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true
+    }
+  });
+
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  micSource = audioCtx.createMediaStreamSource(stream);
+
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 2048;
+  micSource.connect(analyser);
+
+  // Ensure player events clear play flag
+  player.onended = () => { isPlayingTTS = false; };
+  player.onpause = () => { isPlayingTTS = false; };
+
+  setOrbState("listening");
+  setStatus("Listening…");
+  setSub("Speak to start. Pause to stop.");
+  loopVad();
+}
+
+function getRms() {
+  const buf = new Float32Array(analyser.fftSize);
+  analyser.getFloatTimeDomainData(buf);
+  let sum = 0;
+  for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+  return Math.sqrt(sum / buf.length);
+}
+
+function updateMeter(rms) {
+  const pct = Math.max(0, Math.min(100, (rms / 0.08) * 100));
+  bar.style.width = pct.toFixed(1) + "%";
+}
+
+function updateOrb(rms, voice){
+  const e = Math.max(0, Math.min(1, rms / 0.06));
+  smoothEnergy = smoothEnergy + (e - smoothEnergy) * ORB_SMOOTHING;
+
+  const scale = ORB_BASE_SCALE + smoothEnergy * ORB_MAX_BOOST;
+  const wobble = voice ? (smoothEnergy * 2.2) : (smoothEnergy * 0.6);
+  orb.style.transform = `scale(${scale}) rotate(${(wobble * Math.sin(nowMs()/140)).toFixed(3)}deg)`;
+
+  setOrbActive(voice || isRecording);
+}
+
+function startRecording() {
+  if (isPlayingTTS) return; // hard guard
+
+  chunks = [];
+  mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+
+  mediaRecorder.ondataavailable = e => {
+    if (e.data && e.data.size > 0) chunks.push(e.data);
+  };
+
+  mediaRecorder.onstop = async () => {
+    const dur = nowMs() - recordStartedAt;
+    isRecording = false;
+
+    if (dur < MIN_RECORD_MS) {
+      setOrbState("listening");
+      setStatus("Listening…");
+      setSub("Ignored a very short trigger.");
+      return;
+    }
+
+    setOrbState("uploading");
+    setStatus("Uploading…");
+    setSub("Sending audio to the server.");
+
+    const blob = new Blob(chunks, { type: "audio/webm" });
+    await sendAudio(blob);
+
+    cooldownUntil = nowMs() + COOLDOWN_MS;
+    setOrbState("listening");
+    setStatus("Listening…");
+    setSub("Cooldown to avoid echo triggers.");
+  };
+
+  mediaRecorder.start();
+  isRecording = true;
+  recordStartedAt = nowMs();
+  lastVoiceAt = recordStartedAt;
+
+  // reset VAD counters for this segment
+  speechFrames = 0;
+  silenceFrames = 0;
+
+  setOrbState("recording");
+  setStatus("Recording…");
+  setSub("Keep talking. Pause to stop.");
+}
+
+function stopRecording(reason) {
+  if (mediaRecorder && isRecording) {
+    setStatus(reason || "Stopping…");
+    mediaRecorder.stop();
+  }
+}
+
+function loopVad() {
+  const t = nowMs();
+  const rms = getRms();
+  updateMeter(rms);
+
+  // Pause VAD completely during playback to prevent self-trigger loop
+  if (isPlayingTTS) {
+    updateOrb(rms, false);
+    rafId = requestAnimationFrame(loopVad);
+    return;
+  }
+
+  // cooldown window (still animate orb softly)
+  if (t < cooldownUntil) {
+    updateOrb(rms, false);
+    rafId = requestAnimationFrame(loopVad);
+    return;
+  }
+
+  // Smooth RMS to reduce flicker
+  rmsSmooth = rmsSmooth + (rms - rmsSmooth) * RMS_ALPHA;
+
+  const speechLike = rmsSmooth >= (isRecording ? STOP_THRESHOLD : START_THRESHOLD);
+  updateOrb(rmsSmooth, speechLike);
+
+  // DEBUG (every 200ms)
+  if (!window._dbgT || (t - window._dbgT > 200)) {
+    window._dbgT = t;
+    const sinceVoice = isRecording ? Math.max(0, t - lastVoiceAt) : 0;
+    debugEl.textContent =
+      `rms=${rms.toFixed(4)}\n` +
+      `rmsSmooth=${rmsSmooth.toFixed(4)}\n` +
+      `speechLike=${speechLike}\n` +
+      `isRecording=${isRecording}\n` +
+      `sinceLastVoice=${sinceVoice.toFixed(0)}ms\n` +
+      `STOP_SILENCE_MS=${STOP_SILENCE_MS}\n` +
+      `START_THRESHOLD=${START_THRESHOLD}\n` +
+      `STOP_THRESHOLD=${STOP_THRESHOLD}\n` +
+      `START_FRAMES=${START_FRAMES}\n` +
+      `STOP_FRAMES=${STOP_FRAMES}\n` +
+      `isPlayingTTS=${isPlayingTTS}\n`;
+  }
+
+  if (!isRecording) {
+    if (speechLike) {
+      speechFrames += 1;
+      if (speechFrames >= START_FRAMES) {
+        speechFrames = 0;
+        silenceFrames = 0;
+        startRecording();
+      }
+    } else {
+      speechFrames = 0;
+    }
+  } else {
+    if (speechLike) {
+      lastVoiceAt = t;
+      silenceFrames = 0;
+    } else {
+      silenceFrames += 1;
+    }
+
+    if ((t - lastVoiceAt > STOP_SILENCE_MS) && (silenceFrames >= STOP_FRAMES)) {
+      stopRecording("Stopping… (silence detected)");
+    }
+
+    if (t - recordStartedAt > MAX_RECORD_MS) {
+      stopRecording("Stopping… (max length)");
+    }
+  }
+
+  rafId = requestAnimationFrame(loopVad);
+}
+
+async function sendAudio(blob) {
+  const fd = new FormData();
+  fd.append("file", blob, "input.webm");
+  if (SESSION_ID) fd.append("session_id", SESSION_ID);
+
+  const res = await fetch("/api/chat-audio-wav", { method: "POST", body: fd });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    setOrbState("listening");
+    setStatus("Error");
+    setSub("See debug box for details.");
+    debugEl.textContent = `SERVER ERROR (${res.status}):\n${txt}`;
+    return;
+  }
+
+  // persist session id
+  const sid = res.headers.get("X-Session-Id") || "";
+  if (sid && sid !== SESSION_ID) {
+    SESSION_ID = sid;
+    localStorage.setItem("SESSION_ID", sid);
+  }
+
+  const userText = res.headers.get("X-User-Text") || "";
+  const assistantTtsText = res.headers.get("X-Assistant-TTS-Text") || "";
+  const total = res.headers.get("X-Latency-Total-ms") || "";
+  const asr = res.headers.get("X-Latency-ASR-ms") || "";
+  const llm = res.headers.get("X-Latency-LLM-ms") || "";
+  const tts = res.headers.get("X-Latency-TTS-ms") || "";
+  const ffm = res.headers.get("X-Latency-FFmpeg-ms") || "";
+
+  asrEl.textContent = userText;
+  ttsTextEl.textContent = assistantTtsText;
+
+  latPill.textContent = total ? `Latency: ${total} ms` : "Latency: —";
+
+  // show timing + keep last VAD debug after the timings
+  debugEl.textContent =
+    `ffmpeg_ms=${ffm}\n` +
+    `asr_ms=${asr}\n` +
+    `llm_ms=${llm}\n` +
+    `tts_ms=${tts}\n` +
+    `total_ms=${total}\n`;
+
+  const wav = await res.blob();
+  const url = URL.createObjectURL(wav);
+  player.src = url;
+
+  // IMPORTANT: block VAD while playing
+  isPlayingTTS = true;
+
+  setOrbState("playing");
+  setStatus("Playing reply…");
+  setSub("After playback, it will listen again.");
+
+  try {
+    await player.play();
+  } catch {
+    // If autoplay blocked, user can press play; keep flag until pause/end
+  }
+}
+
+// Start immediately
+initMicAndVad().catch(e => {
+  setOrbState("listening");
+  setStatus("Microphone init failed");
+  setSub("Check browser permissions.");
+  alert(e.message || e);
+});
+</script>
+</body>
+</html>
