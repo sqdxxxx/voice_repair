@@ -20,3 +20,6 @@ bin/piper/
 bin/ffmpeg/
 models/
 downloads/
+bin/
+logs/
+*.wav.txt
